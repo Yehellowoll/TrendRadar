@@ -167,10 +167,15 @@ class RSSFetcher:
                 )
                 items.append(item)
 
-            # 注意：新鲜度过滤已移至推送阶段（_convert_rss_items_to_list）
-            # 这样所有文章都会存入数据库，但旧文章不会推送
-            print(f"[RSS] {feed.name}: 获取 {len(items)} 条")
-            return items, None
+            # 新鲜度过滤：在抓取阶段即拦截过期文章
+            # 推送阶段 _convert_rss_items_to_list 会再次过滤作为兜底
+            original_count = len(items)
+            filtered_items, filtered_count = self._filter_by_freshness(items, feed)
+            if filtered_count > 0:
+                print(f"[RSS] {feed.name}: 获取 {original_count} 条，过滤过期 {filtered_count} 条，保留 {len(filtered_items)} 条")
+            else:
+                print(f"[RSS] {feed.name}: 获取 {len(filtered_items)} 条")
+            return filtered_items, None
 
         except requests.Timeout:
             error = f"请求超时 ({self.timeout}s)"
