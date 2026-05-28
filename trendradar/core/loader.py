@@ -578,6 +578,13 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     platforms_config = config_data.get("platforms", {})
     config["PLATFORMS"] = [p for p in platforms_config.get("sources", []) if p.get("enabled", True)]
 
+    # 热榜陈旧话题过滤配置
+    stale_filter = platforms_config.get("stale_filter", {})
+    config["PLATFORMS_STALE_FILTER"] = {
+        "ENABLED": stale_filter.get("enabled", True),
+        "MAX_AGE_DAYS": stale_filter.get("max_age_days", 30),
+    }
+
     # RSS 配置
     config["RSS"] = _load_rss_config(config_data)
 

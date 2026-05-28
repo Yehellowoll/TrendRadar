@@ -13,7 +13,7 @@ import os
 import re
 import sys
 import webbrowser
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
@@ -793,6 +793,85 @@ class NewsAnalyzer:
 
         return standalone_data
 
+    def _filter_stale_hotlist_items(self, data_source: Dict) -> Tuple[Dict, int]:
+        """
+        过滤在榜超过指定天数的陈旧话题
+
+        通过比较当天数据与历史数据库中的 URL，
+        移除持续出现超过 max_age_days 天的"钉子户"话题。
+
+        Args:
+            data_source: 热榜数据 {source_id: {title: title_data}}
+
+        Returns:
+            (过滤后的数据, 被过滤的数量)
+        """
+        stale_config = self.ctx.config.get("PLATFORMS_STALE_FILTER", {})
+        if not stale_config.get("ENABLED", True):
+            return data_source, 0
+
+        max_age_days = stale_config.get("MAX_AGE_DAYS", 30)
+        if max_age_days <= 0:
+            return data_source, 0
+
+        today = self.ctx.format_date()
+        output_dir = Path("output") / "news"
+
+        if not output_dir.exists():
+            return data_source, 0
+
+        available_dates = []
+        for db_file in output_dir.glob("*.db"):
+            date_str = db_file.stem
+            if re.match(r"^\d{4}-\d{2}-\d{2}$", date_str) and date_str < today:
+                available_dates.append(date_str)
+
+        if not available_dates:
+            return data_source, 0
+
+        today_dt = datetime.strptime(today, "%Y-%m-%d").date()
+        cutoff_dt = today_dt - timedelta(days=max_age_days)
+        old_dates = sorted([d for d in available_dates if d < cutoff_dt.strftime("%Y-%m-%d")])
+
+        if not old_dates:
+            return data_source, 0
+
+        oldest_date = old_dates[0]
+        try:
+            old_data = self.storage_manager.get_today_all_data(date=oldest_date)
+        except Exception:
+            return data_source, 0
+
+        if not old_data or not old_data.items:
+            return data_source, 0
+
+        stale_urls = set()
+        for source_id, news_list in old_data.items.items():
+            for item in news_list:
+                if item.url:
+                    stale_urls.add(item.url)
+
+        if not stale_urls:
+            return data_source, 0
+
+        filtered_source = {}
+        filtered_count = 0
+        for source_id, titles in data_source.items():
+            filtered_titles = {}
+            for title, title_data in titles.items():
+                url = title_data.get("url", "")
+                if url and url in stale_urls:
+                    filtered_count += 1
+                else:
+                    filtered_titles[title] = title_data
+            if filtered_titles:
+                filtered_source[source_id] = filtered_titles
+
+        if filtered_count > 0:
+            print(f"[热榜] 在榜陈旧话题过滤：移除 {filtered_count} 条（首次出现在 {oldest_date}，距今超过 {max_age_days} 天）")
+
+        return filtered_source, filtered_count
+
     def _run_analysis_pipeline(
         self,
         data_source: Dict,
@@ -812,6 +891,9 @@ class NewsAnalyzer:
         rss_new_urls: Optional[set] = None,
     ) -> Tuple[List[Dict], Optional[str], Optional[AIAnalysisResult], Optional[List[Dict]]]:
         """统一的分析流水线：数据处理 → 统计计算（关键词/AI筛选）→ AI分析 → HTML生成"""
+
+        # 热榜陈旧话题过滤
+        data_source, _ = self._filter_stale_hotlist_items(data_source)
 
         # 根据筛选策略选择数据处理方式
         if self.filter_method == "ai":
