@@ -1,0 +1,66 @@
+# ============================================================
+# GitHub Actions 保活工作流（Keepalive）
+# ------------------------------------------------------------
+# 解决的问题：GitHub 会在仓库「连续 60 天没有任何提交」后，
+# 自动停用所有 schedule 定时任务（静默发生，无失败记录）。
+# 注意：定时任务的"运行"不算仓库活动，只有"提交"才算。
+# 本工作流每周自检一次，距上次提交 >= 30 天就自动生成一个
+# 空提交，把 60 天倒计时重置，从此无需人工干预。
+#
+# 前置设置（一次性）：
+#   Settings → Actions → General → Workflow permissions
+#   选择 "Read and write permissions" → Save
+#   （否则最后的 git push 会被拒绝）
+# ============================================================
+
+name: Keepalive
+
+on:
+  schedule:
+    # 每周一 03:17 UTC（北京时间 11:17），避开整点高峰
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: true
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check days since last commit
+        id: check
+        run: |
+          LAST=$(git log -1 --format=%ct)
+          NOW=$(date +%s)
+          DAYS=$(( (NOW - LAST) / 86400 ))
+          echo "Days since last commit: ${DAYS}"
+          if [ "$DAYS" -ge 30 ]; then
+            echo "need=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "need=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Keepalive commit
+        if: steps.check.outputs.need == 'yes'
+        run: |
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/.keepalive
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/.keepalive
+          git commit -m "chore: keepalive [skip ci]"
+          git push
+          echo "Keepalive commit pushed. 60-day timer reset."
+
+      - name: Skip
+        if: steps.check.outputs.need == 'no'
+        run: echo "Recent commit found, skip."

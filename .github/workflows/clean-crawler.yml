@@ -6,9 +6,17 @@ name: Check In
 # 📌 操作方法 / How to use:
 #   1. 点击 "Run workflow" 按钮 / Click "Run workflow" button
 #   2. 每 7 天内至少运行一次 / Run at least once every 7 days
+#
+# 🤖 本仓库已改为自动签到 / Auto check-in in this repo:
+#    schedule 每 3 天自动运行一次（北京时间周一/周四 09:00），
+#    无需再手动点击；workflow_dispatch 保留用于手动补跑。
+#    依据：该 workflow 本身只删除运行记录以重置计时，不校验触发方式，
+#    定时触发与手动触发效果完全相同。
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 1 * * 1,4"
 
 jobs:
   del_runs:
