@@ -62,7 +62,7 @@ platforms:
   # - max_age_days: 最大在榜天数（正整数），超过此天数的话题将被过滤；0=禁用
   stale_filter:
     enabled: true
-    max_age_days: 30
+    max_age_days: 5
 
   sources:
    # === 综合新闻媒体类 ===
@@ -168,7 +168,7 @@ rss:
   freshness_filter:
     enabled: true                     # 是否启用新鲜度过滤（默认启用）
 
-    max_age_days: 10                   # 最大文章年龄（天）
+    max_age_days: 5                    # 最大文章年龄（天）
                                       # - 正整数：只推送 N 天内的文章
                                       # - 0：禁用过滤，推送所有文章
 
@@ -190,6 +190,43 @@ rss:
     - id: "yahoo-finance"
       name: "雅虎财经"
       url: "https://finance.yahoo.com/news/rssindex"
+      enabled: false                  # 实测返回 403（已不再对 RSS 客户端开放），配置保留便于日后恢复
+
+    # ── 财经深度源（新增，均已实测返回有效 RSS）────────────────
+    - id: "cnbc-top"
+      name: "CNBC 头条"
+      url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114"
+
+    - id: "marketwatch-top"
+      name: "MarketWatch 头条"
+      url: "http://feeds.marketwatch.com/marketwatch/topstories/"
+
+    - id: "wsj-markets"
+      name: "华尔街日报 市场"
+      url: "https://feeds.a.dj.com/rss/RSSMarketsMain.xml"
+
+    - id: "seekingalpha"
+      name: "Seeking Alpha 市场"
+      url: "https://seekingalpha.com/market_currents.xml"
+
+    # ── 中文科技/产业源（新增）──────────────────────────────
+    - id: "qbitai"
+      name: "量子位"
+      url: "https://www.qbitai.com/feed"
+
+    - id: "tmtpost"
+      name: "钛媒体"
+      url: "https://www.tmtpost.com/rss.xml"
+
+    - id: "ithome"
+      name: "IT之家"
+      url: "https://www.ithome.com/rss/"
+      max_age_days: 3                 # 更新密集，只推 3 天内
+
+    - id: "sspai"
+      name: "少数派"
+      url: "https://sspai.com/feed"
+      max_age_days: 7                 # 更新较慢，放宽到 7 天
 
     # 自定义源示例
     # - id: "custom-feed"
@@ -224,11 +261,12 @@ report:
   # 关键词模式分组排序方式（仅 keyword 模式生效）
   # true: 按 frequency_words.txt 的定义顺序排列
   # false: 按匹配到的热点条数排序（条数多的在前）
-  sort_by_position_first: false
+  sort_by_position_first: true
 
   rank_threshold: 5                   # 排名高亮阈值（影响展示强调，不改变抓取范围）
 
-  max_news_per_keyword: 0             # 每个关键词/标签最大显示数量（0=不限制，仅影响展示裁剪）
+  max_news_per_keyword: 6             # 每个关键词组最大显示数量（0=不限制）
+                                      # 配合 frequency_words.txt 里的 @数字 使用，防止单组刷屏
 
 
 # ===============================================================
@@ -242,7 +280,10 @@ report:
 # 5) 这里决定“筛选路径”，不决定 AI 模型（模型在 ai 段）
 # ===============================================================
 filter:
-  method: "ai"                     # 可选: keyword | ai
+  method: "keyword"                # 可选: keyword | ai
+                                   # 本仓库未配置 AI_API_KEY：填 ai 时运行时会先尝试 AI 筛选、
+                                   # 失败后自动回退到 frequency_words.txt。这里显式填 keyword，
+                                   # 省掉每次运行的一次失败尝试和日志噪音。
 
   # AI 模式标签排序开关（仅 ai 模式生效）
   # true: 按标签优先级排序（来自兴趣描述提取顺序）
@@ -571,7 +612,7 @@ ai_analysis:
                                       # GitHub Action 部署默认推送约 20 次（每小时推送一次）， 约 0.1 元/天
                                       # Docker 部署默认推送 48 次(每半小时推送一次)， 约 0.2 元/天
 
-  include_rss: false                # 是否包含 RSS 内容进行分析
+  include_rss: true                 # 是否包含 RSS 内容进行分析
   
   include_standalone: true          # 是否将独立展示区数据纳入 AI 分析
                                     # 数据源列表来自 display.standalone.platforms / display.standalone.rss_feeds
