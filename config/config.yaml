@@ -62,7 +62,7 @@ platforms:
   # - max_age_days: 最大在榜天数（正整数），超过此天数的话题将被过滤；0=禁用
   stale_filter:
     enabled: true
-    max_age_days: 5
+    max_age_days: 10
 
   sources:
    # === 综合新闻媒体类 ===
